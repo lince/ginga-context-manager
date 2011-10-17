@@ -1,0 +1,32 @@
+make  all-recursive
+make[1]: Entrando no diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager'
+Making all in files
+make[2]: Entrando no diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/files'
+make[2]: Nada a ser feito para `all'.
+make[2]: Saindo do diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/files'
+Making all in include
+make[2]: Entrando no diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/include'
+make[2]: Nada a ser feito para `all'.
+make[2]: Saindo do diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/include'
+Making all in include/system
+make[2]: Entrando no diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/include/system'
+make[2]: Nada a ser feito para `all'.
+make[2]: Saindo do diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/include/system'
+Making all in include/user
+make[2]: Entrando no diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/include/user'
+make[2]: Nada a ser feito para `all'.
+make[2]: Saindo do diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/include/user'
+Making all in src
+make[2]: Entrando no diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/src'
+g++ -DHAVE_CONFIG_H -I. -I.. -I/usr/local/include/directfb/ -I/usr/local/include/ginga/ -I/usr/include/libuser/   -I/usr/local/include/ginga/ -I/usr/local/include/ -I/usr/include/   -fPIC -g -O2 -MT ImplicitContextManager.o -MD -MP -MF .deps/ImplicitContextManager.Tpo -c -o ImplicitContextManager.o ImplicitContextManager.cpp
+mv -f .deps/ImplicitContextManager.Tpo .deps/ImplicitContextManager.Po
+/bin/sh ../libtool --tag=CXX   --mode=link g++  -fPIC -g -O2 -Wl,-soname,libgingacccontextmanager.so -shared -L/usr/local/lib/ginga/iocontents -L/usr/local/lib/ginga/ -L/usr/local/lib/ -L/usr/lib/  -o libgingacccontextmanager.so ContextManager.o GingaUser.o SystemInfo.o DataInterface.o ImplicitContextManager.o ImplicitProfiles.o -ldl -L/usr/local/lib/ginga/ 
+g++ -fPIC -g -O2 -Wl,-soname -Wl,libgingacccontextmanager.so -shared -o libgingacccontextmanager.so ContextManager.o GingaUser.o SystemInfo.o DataInterface.o ImplicitContextManager.o ImplicitProfiles.o  -L/usr/local/lib/ginga/iocontents -L/usr/local/lib/ginga/ -L/usr/local/lib/ -L/usr/lib/ -ldl  
+make[2]: Saindo do diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/src'
+Making all in test
+make[2]: Entrando no diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/test'
+make[2]: Nada a ser feito para `all'.
+make[2]: Saindo do diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager/test'
+make[2]: Entrando no diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager'
+make[2]: Saindo do diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager'
+make[1]: Saindo do diretório `/usr/src/gingaUFSCAR/gingacc-cpp/gingacc-contextmanager'

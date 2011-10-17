@@ -1,0 +1,482 @@
+/******************************************************************************
+Este arquivo eh parte da implementacao do ambiente declarativo do middleware
+Ginga (Ginga-NCL).
+
+Direitos Autorais Reservados (c) 1989-2007 PUC-Rio/Laboratorio TeleMidia
+
+Este programa eh software livre; voce pode redistribui-lo e/ou modificah-lo sob
+os termos da Licenca Publica Geral GNU versao 2 conforme publicada pela Free
+Software Foundation.
+
+Este programa eh distribuido na expectativa de que seja util, porem, SEM
+NENHUMA GARANTIA; nem mesmo a garantia implicita de COMERCIABILIDADE OU
+ADEQUACAO A UMA FINALIDADE ESPECIFICA. Consulte a Licenca Publica Geral do
+GNU versao 2 para mais detalhes.
+
+Voce deve ter recebido uma copia da Licenca Publica Geral do GNU versao 2 junto
+com este programa; se nao, escreva para a Free Software Foundation, Inc., no
+endereco 59 Temple Street, Suite 330, Boston, MA 02111-1307 USA.
+
+Para maiores informacoes:
+ncl @ telemidia.puc-rio.br
+http://www.ncl.org.br
+http://www.ginga.org.br
+http://www.telemidia.puc-rio.br
+******************************************************************************
+This file is part of the declarative environment of middleware Ginga (Ginga-NCL)
+
+Copyright: 1989-2007 PUC-RIO/LABORATORIO TELEMIDIA, All Rights Reserved.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License version 2 as published by
+the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU General Public License version 2 for more
+details.
+
+You should have received a copy of the GNU General Public License version 2
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
+
+For further information contact:
+ncl @ telemidia.puc-rio.br
+http://www.ncl.org.br
+http://www.ginga.org.br
+http://www.telemidia.puc-rio.br
+*******************************************************************************/
+
+#include "../../../include/adaptation/context/AuthenticationServer.h"
+
+#include "../../../config.h"
+
+#if HAVE_COMPSUPPORT
+#include "cm/IComponentManager.h"
+using namespace ::br::pucrio::telemidia::ginga::core::cm;
+#else
+#include "../../../../gingacc-contextmanager/include/ContextManager.h"
+#include "../../../../gingacc-contextmanager/include/system/SystemInfo.h"
+#include "../../../../gingacc-contextmanager/include/user/GingaUser.h"
+#endif
+
+#include "sstream"
+
+namespace br {
+namespace pucrio {
+namespace telemidia {
+namespace ginga {
+namespace ncl {
+namespace adaptation {
+namespace context {
+
+AuthenticationServer::AuthenticationServer(PresentationContext *pctx) {
+	this->pctx = pctx;
+	this->ctxm = pctx->getContextManager();
+};
+
+AuthenticationServer::~AuthenticationServer() {
+//cout << "&&&&&&&&&&&&&&&&&&&&Destruindo o Authenticantion" << endl;
+};
+
+IGingaUser *AuthenticationServer::getGingaUser(string userid, string passwd) {
+	int uid = atoi(userid.c_str());
+	IGingaUser *u = ctxm->getUser(uid);
+	if (u != NULL && u->isValidPassword(passwd))
+		return u;
+	return NULL;
+};
+
+bool AuthenticationServer::setUserProperty(IGingaUser *u, string passwd, string p, string v) {
+	if (p == "name") 
+		u->setUserName(passwd, v);
+
+	else if (p == "password") 
+		return u->setPassword(passwd, v);
+
+	else if (p == "age") 
+		u->setUserAge(passwd, atoi(v.c_str()));
+
+	else if (p == "location") 
+		u->setUserLocation(passwd, v);
+
+	else if (p == "gender" || p == "genre") 
+		u->setUserGenre(passwd, v == "m"? 'm': 'f');
+
+	else
+		return false;
+
+	return true;
+};
+
+bool AuthenticationServer::getUserProperty(IGingaUser *u, string passwd, string p, string &v) {
+	v = "";
+	if (p == "name") {
+		v = u->getUserName();
+
+	} else if (p == "age") {
+   		stringstream ss;
+   		ss << u->getUserAge();
+		v = ss.str();
+
+	} else if (p == "location") { 
+		v = u->getUserLocation();
+
+	} else if (p == "gender" || p == "genre") {
+		v = u->getUserGenre();
+
+	} else
+		return false;
+
+	return true;
+};
+
+const char *AuthenticationServer::addUser(int csocket, string name, string passwd, string age, string location, string gender) {
+	char *result = P_OK;
+	int uid;
+	ictxm = ImplicitContextManager::getInstance();
+	cout << "AuthenticationServer::addUser: " << hex << ictxm << endl;
+	pctx->lock();
+	uid = ctxm->addUser(name, passwd, atoi(age.c_str()), location, gender == "m"? 'm': 'f');
+	ctxm->setCurrentUserId(uid);
+	pctx->initializeContext();
+	pctx->unlock();
+	ictxm->createProfile(uid);
+	cout << "AuthenticationServer::addUser: add user (userid " << uid
+		<< ", password " << passwd 
+                << ", name " << name 
+                << ", age " << age 
+                << ", location " << location 
+                << ", gender " << gender  
+		<< ")" << endl;		
+	return result;
+};
+
+const char *AuthenticationServer::removeUser(int csocket, string userid, string passwd) {
+	char   *result = P_OK;
+	IGingaUser *u = getGingaUser(userid, passwd);
+	if (u != NULL) {
+		//debug pensar onde colocar depois
+		if(atoi(userid.c_str()) == ictxm ->getCurrentImplicitUserId()){
+			ictxm ->setCurrentImplicitUserId(0);
+			ictxm ->setCurrentProfileId(0, 0);
+		}
+		ictxm ->remove(atoi(userid.c_str()));
+		pctx->lock();
+		if (! ctxm->removeUser(atoi(userid.c_str())))
+			result = P_ERROR;
+		cout << "AuthenticationServer::removeUser: " << userid << " removed." << endl;
+		pctx->unlock();
+	} else
+		result = P_NOPWU;
+	ictxm ->setNewData(true);
+	return result;
+};
+
+const char *AuthenticationServer::login(int csocket, string userid, string passwd) {
+	char   *result = P_OK;
+	IGingaUser *u = getGingaUser(userid, passwd);
+	if (u != NULL) {
+		ictxm = ImplicitContextManager::getInstance();
+		int uid = atoi(userid.c_str());
+		pctx->lock();
+		ctxm->setCurrentUserId(uid);
+		pctx->initializeContext();
+		pctx->unlock();
+		ictxm->setCurrentProfileId(uid, 0);
+		cout << "AuthenticationServer::login: current user = " << userid << "." << endl;
+	} else
+		result = P_NOPWU;
+	return result;
+};
+
+const char *AuthenticationServer::logout(int csocket, string userid, string passwd) {
+	char   *result = P_OK;
+	IGingaUser *u = getGingaUser(userid, passwd);
+	if (u != NULL) {
+		ictxm = ImplicitContextManager::getInstance();
+		pctx->lock();
+		ctxm->setCurrentUserId(0); // suppose 0 is the default user
+		pctx->initializeContext();
+		pctx->unlock();
+		ictxm->setCurrentProfileId(0, 0);
+		ictxm->setCurrentImplicitUserId(0);
+		cout << "AuthenticationServer::logout: current user = default." << endl;
+	} else
+		result = P_NOPWU;
+	return result;
+};
+
+const char *AuthenticationServer::updateUser(int csocket, string userid, string passwd, string property, string value) {
+	char   *result = P_OK;
+	IGingaUser *u = getGingaUser(userid, passwd);
+	if (u != NULL) {	
+		pctx->lock();
+		bool success = setUserProperty(u, passwd, property, value);
+		pctx->unlock();
+		if (! success)
+			return P_NOCMD;
+		cout << "AuthenticationServer::updateUser: " << property << " <- " << value << endl;
+	} else			
+		result = P_NOPWU;
+	ictxm ->setNewData(true);
+	return result;
+};
+
+/**
+* Debug method: allows the update of any internal context var -- debug purpose
+*/
+const char *AuthenticationServer::updateVar(int csocket, string userid, string passwd, string property, string value) {
+	char   *result = P_OK;
+	IGingaUser *u = getGingaUser(userid, passwd);
+	if (u != NULL) {	
+		pctx->setPropertyValue(property, value);
+		cout << "AuthenticationServer::updateVar: " << property << " <- " << value << endl;
+	} else			
+		result = P_NOPWU;	
+	return result;
+};
+
+/**
+* Debug method: allows to show the value of any internal context var -- debug purpose
+*/
+const char *AuthenticationServer::showVar(int csocket, string userid, string passwd, string property) {
+	char   *result = P_OK;
+	IGingaUser *u = getGingaUser(userid, passwd);
+	if (u != NULL) {	
+		ictxm = ImplicitContextManager::getInstance();
+		string value = "";
+		if (property == CURIPROFVAR || 
+                    property.substr(0, IPROFVAR_SIZE) == IPROFVAR) {
+			if (ictxm != NULL && ctxm != NULL) {
+				map<string, string> *ctxTable = ctxm->getUserProfile(ictxm->getCurrentImplicitUserId());
+				value = (*ctxTable)[property];
+			}
+		} else
+			value = pctx->getPropertyValue(property);
+		cout << "AuthenticationServer::showVar: " << property << " = " << value << endl;
+		value += "\n";
+ 		send(csocket, value.c_str(), value.size(), 0);
+	} else			
+		result = P_NOPWU;	
+	return result;
+};
+
+const char *AuthenticationServer::queryUser(int csocket, string userid, string passwd, string property) {
+	char   *result = P_OK;
+	IGingaUser *u = getGingaUser(userid, passwd);
+	if (u != NULL) {	
+		string value;		
+		if (! getUserProperty(u, passwd, property, value))
+			return P_ERROR;
+		cout << "AuthenticationServer::queryUser: " << property << " [" << value << "]" << endl;
+		value += "\n";
+ 		send(csocket, value.c_str(), value.size(), 0);
+	} else			
+		result = P_NOPWU;	
+	return result;
+};
+
+const char *AuthenticationServer::getCurrentUser(int csocket) {
+	char   *result = P_OK;
+	int uid = ctxm->getCurrentUserId();
+	stringstream ss;
+	ss << uid;
+	string suid = ss.str();
+	cout << "AuthenticationServer::getCurrentUserId: sending [" << suid << "]" << endl;
+	suid += "\n";
+ 	send(csocket, suid.c_str(), suid.size(), 0);
+	return result;
+};
+
+const char *AuthenticationServer::listUsers(int csocket) {
+	char   *result = P_OK;
+	IGingaUser *u;
+	vector<int>* uids = ctxm->getUserIds(); 
+	string susers = "";
+	for (int i = 0; i < uids->size(); i ++) {
+		u = ctxm->getUser((*uids)[i]);
+   		stringstream ss;
+   		ss << (*uids)[i];
+		/* cout << "AuthenticationServer::listUsers: " << ss.str() << " " 
+                                                            << u->getUserName() << " "
+                                                            << u->getUserAge() << " "
+                                                            << u->getUserLocation() << " "
+                                                            << u->getUserGenre() << " "
+                                                            << endl; */
+		susers += ss.str() + ":" + u->getUserName() + ";"; 	
+	}
+	cout << "AuthenticationServer::listUsers: sending [" << susers.c_str() << "]" << endl;
+	susers += "\n";
+ 	send(csocket, susers.c_str(), susers.size(), 0);
+	delete uids;
+	return result;
+};
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Codigo de depuração - Ângelo Bitar
+const char *AuthenticationServer::debug(int csocket) {
+	const char   *result = P_OK;
+		
+	stringstream message;
+	ictxm = ImplicitContextManager::getInstance();
+	string curiprofvar = "?";
+	if (ictxm != NULL && ctxm != NULL && ictxm->isNewData()) {
+		
+		pctx->lock();
+				
+		vector<int>* uids = ctxm->getUserIds();
+		IGingaUser *u = ctxm->getUser(0);
+		map<string, string> *ctxTable0 = ctxm->getUserProfile(0);
+		//map<string, string> *ctxTableImp = ctxm->getUserProfile(ctxm->getCurrentUserId());
+		map<string, string> *ctxTableImp = ctxm->getUserProfile(ictxm->getCurrentImplicitUserId());
+		//cout << "AuthenticationServer::debug::curiprovar = " << (*ctxTableImp)[CURIPROFVAR] << endl;	 
+		curiprofvar = (*ctxTableImp)[CURIPROFVAR];
+				
+		message << "current=" << ctxm->getCurrentUserId() << "&";
+		message << "curiprof=" << curiprofvar << "&";
+		message << "candidates=" << (*ctxTable0)["debug.candidate"] << "&";
+		message << "channel=" << (*ctxTable0)["debug.channel"] << "&";
+		message << "service=" << (*ctxTable0)["debug.service"] << "&";
+		message << "genre=" << (*ctxTable0)["debug.genre"] << "&";
+		message << "subgenre=" << (*ctxTable0)["debug.subgenre"] << "&";
+		map<string, string>::iterator it;
+		for (it = ctxTable0->begin(); it != ctxTable0->end(); it ++) {
+			if (it->first.substr(0, 11) == "debug.cprof")
+				message << it->first << "=" << it->second << "&";
+		}
+		for (int i = 0; i < uids->size(); i ++) {
+			u = ctxm->getUser((*uids)[i]);
+			message << "user=" << (*uids)[i] << ",";
+			message << u->getUserName()<< ",";
+			message << u->getUserAge()<< ",";
+			message << u->getUserLocation()<< ",";
+			message << u->getUserGenre()<< "&";
+			map<string, string> *ctxTable = ctxm->getUserProfile((*uids)[i]);
+			if ((*uids)[i] != 0){
+				message << "default.iprof0=" << (*ctxTable)["default.iprof0"] << "&";
+				if (ctxTable->find("debug.prob0") != ctxTable->end())
+					message << "debug.prob0=" << (*ctxTable)["debug.prob0"] << "&";
+				else 
+					message << "debug.prob0=1.0&";
+			} else {
+				for (it = ctxTable->begin(); it != ctxTable->end(); it ++) {
+					if (it->first.substr(0, IPROFVAR_SIZE) == IPROFVAR) 
+						message << it->first << "=" << it->second << "&";
+				}
+				for (it = ctxTable->begin(); it != ctxTable->end(); it ++) {
+					if (it->first.substr(0, 10) == "debug.prob") {
+						//current / probabilidade / candidate
+						if(ctxm->getCurrentUserId() != (*uids)[i] && it->second == "1" && (*ctxTable0)["debug.candidate"] == "1")
+							message << it->first << "=" << 0.9 << "&";
+						else
+							message << it->first << "=" << it->second << "&";
+					}	
+				}		
+			}
+		}
+		
+		pctx->unlock();
+		
+		ictxm->setNewData(false);
+	}
+	
+	message << endl;
+	send(csocket, message.str().c_str(), message.str().size(), 0);
+	cout << "Message enviada=" << message.str().c_str() << endl;
+	return result;
+};
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void AuthenticationServer::processClient(int new_socket) {
+	const char   *result = P_OK;
+	char   buffer[BufferSize];
+	string cmd;
+	vector<string> tokens;
+
+      	int len = recv(new_socket,buffer,BufferSize,0);
+	if (len > -1) {
+
+		buffer[len] = 0;
+      		printf("Message received (%d bytes): [%s]\n", len, buffer);
+		string cmd = buffer;
+		tokens.clear();
+		tokenize(cmd, tokens, ";");
+		if (tokens[0] == "add" && tokens.size() == 6) {
+			result = addUser(new_socket, tokens[1], tokens[2], tokens[3], tokens[4], tokens[5]);
+
+		} else if (tokens[0] == "remove" && tokens.size() == 3) {
+			result = removeUser(new_socket, tokens[1], tokens[2]);
+
+		} else if (tokens[0] == "login" && tokens.size() == 3) {
+			result = login(new_socket, tokens[1], tokens[2]);
+
+		} else if (tokens[0] == "logout" && tokens.size() == 3) {
+			result = logout(new_socket, tokens[1], tokens[2]);
+
+		} else if (tokens[0] == "update" && tokens.size() == 5) {
+			result = updateUser(new_socket, tokens[1], tokens[2], tokens[3], tokens[4]);
+
+		} else if (tokens[0] == "query" && tokens.size() == 4) {
+			result = queryUser(new_socket, tokens[1], tokens[2], tokens[3]);
+
+		} else if (tokens[0] == "current" && tokens.size() == 1) {
+			result = getCurrentUser(new_socket);
+
+		} else if (tokens[0] == "users" && tokens.size() == 1) {
+			result = listUsers(new_socket);
+
+		// debug
+		} else if (tokens[0] == "shvar" && tokens.size() == 4) {
+			result = showVar(new_socket, tokens[1], tokens[2], tokens[3]);
+		
+		// debug
+		} else if (tokens[0] == "upvar" && tokens.size() == 5) {
+			result = updateVar(new_socket, tokens[1], tokens[2], tokens[3], tokens[4]);
+		//Codigo de depuração - Ângelo Bitar		
+		} else if (tokens[0] == "d" && tokens.size() == 1) {
+			result = debug(new_socket);
+
+		} else
+			result = P_NOCMD;
+
+	} else
+		result = P_ERROR;
+
+      	send(new_socket, result, ResultSize, 0);		
+};
+
+void AuthenticationServer::start() {
+	int    create_socket, new_socket, addrlen, len;
+	struct sockaddr_in address;
+  
+	if ((create_socket = socket(AF_INET,SOCK_STREAM,0)) > 0)
+     		printf("AuthenticationServer::start(): socket created\n");
+
+	address.sin_family = AF_INET;
+	address.sin_addr.s_addr = INADDR_ANY;
+	address.sin_port = htons(ASPort);
+	if (bind(create_socket,(struct sockaddr *)&address,sizeof(address)) == 0)
+	     	printf("AuthenticationServer::start(): binding Socket\n");
+
+	while(1) {
+   		listen(create_socket,3);
+   		addrlen = sizeof(struct sockaddr_in); 
+   		new_socket = accept(create_socket,(struct sockaddr *)&address, (socklen_t*)&addrlen);
+   		if (new_socket > 0) {
+      			printf("AuthenticationServer::start(): client %s connected\n",inet_ntoa(address.sin_addr));
+			processClient(new_socket);
+		}
+   		close(new_socket);
+	};
+ 
+	close(create_socket);
+};
+
+
+
+}
+}
+}
+}
+}
+}
+}
